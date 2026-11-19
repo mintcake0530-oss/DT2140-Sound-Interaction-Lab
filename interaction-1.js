@@ -38,18 +38,31 @@ door.createDSP(audioContext, 1024)
 function accelerationChange(accx, accy, accz) {
 }
 
+let smoothVolume = 0;   // 平滑后的音量（用来做渐入渐隐）
+
+let smoothVolume = 0;   // 平滑后的音量（用来做渐入渐隐）
+
 function rotationChange(rotx, roty, rotz) {
     // 1. 左右倾斜的角度（rotationY），从弧度换成度数
     let tilt = Math.abs(degrees(roty));
 
-    // 2. 把 0~90 度换算成门的开合程度 0~0.5
-    let position = map(tilt, 0, 90, 0, 0.5, true);
+    // 2. 小于 20 度不出声（"死区"），避免手一抖就响
+    let startTilt = 10;
 
-    // 3. 在页面上显示当前角度（调试用）
+    // 3. 目标音量：没到 20 度是 0，超过后随角度慢慢变大，最大 0.7
+    let targetVolume = map(tilt, startTilt, 90, 0, 0.7, true);
+
+    // 4. 渐入渐隐：音量每次只往目标走 5%
+    smoothVolume = smoothVolume + (targetVolume - smoothVolume) * 0.05;
+
+    // 5. 把 20~90 度换算成门的开合程度 0~0.5
+    let position = map(tilt, startTilt, 90, 0, 0.5, true);
+
+    // 6. 在页面上显示当前角度（调试用）
     statusLabels[1].html("tilt: " + round(tilt));
 
-    // 4. 把结果送给声音
-    playAudio(position);
+    // 7. 把结果送给声音
+    playAudio(position, smoothVolume);
 }
 
 function mousePressed() {
@@ -80,7 +93,7 @@ function getMinMaxParam(address) {
 // AUDIO INTERACTION
 //==========================================================================================
 
-function playAudio(position) {
+function playAudio(position, volume) {
     if (!dspNode) {
         return;
     }
@@ -88,6 +101,7 @@ function playAudio(position) {
         return;
     }
     dspNode.setParamValue("/door/door/position", position);
+    dspNode.setParamValue("/door/volume", volume);
 }
 
 //==========================================================================================
