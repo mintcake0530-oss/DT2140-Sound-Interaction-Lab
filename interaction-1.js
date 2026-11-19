@@ -39,16 +39,16 @@ door.createDSP(audioContext, 1024)
 //      就像真实的门：推动时吱呀响，不动就安静。倾斜角度越大，门开得越大。
 //==========================================================================================
 
-const VERSION = "v7";          // 用来确认手机上加载的是不是最新代码
-const START_SPEED = 0.8;       // 速度超过这个值才算"开始转"（度/帧）
-const STOP_SPEED = 0.5;        // 速度低于这个值就算"停下"——两个门槛不同，手抖时不会来回跳
-const FULL_SPEED = 3;          // 转动速度达到这个值时音量最大
+const VERSION = "v8";          // 用来确认手机上加载的是不是最新代码
+const WINDOW = 15;             // 看最近多少帧（约 0.25 秒）的角度变化
+const START_CHANGE = 8;        // 最近 0.25 秒里倾斜变化超过 8 度，才算"在开门"
+const STOP_CHANGE = 4;         // 变化小于 4 度就算"停下"
+const FULL_CHANGE = 25;        // 变化达到 25 度时音量最大（转得越快越响）
 const MAX_VOLUME = 0.7;        // 最大音量
 const FADE_IN = 0.04;          // 渐入速度：开始转时声音出现得慢一点（越小越慢）
 const FADE_OUT = 0.3;          // 渐隐速度：停下后声音消失得快一些（越大越快）
 
-let lastTilt = null;           // 上一帧的倾斜角度
-let smoothSpeed = 0;           // 平滑后的转动速度
+let tiltHistory = [];          // 最近几帧的倾斜角度
 let smoothVolume = 0;          // 平滑后的音量
 let isMoving = false;          // 现在是不是在转
 
@@ -58,41 +58,43 @@ function accelerationChange(accx, accy, accz) {
 function rotationChange(rotx, roty, rotz) {
     // 1. 左右倾斜的角度（rotationY），从弧度换成度数
     let tilt = Math.abs(degrees(roty));
-    if (lastTilt === null) lastTilt = tilt;
 
-    // 2. 转动速度 = 这一帧和上一帧的角度差，再做一点平滑
-    let speed = Math.abs(tilt - lastTilt);
-    lastTilt = tilt;
-    smoothSpeed = smoothSpeed + (speed - smoothSpeed) * 0.5;
+    // 2. 记住最近 WINDOW 帧的角度
+    tiltHistory.push(tilt);
+    if (tiltHistory.length > WINDOW) tiltHistory.shift();
 
-    // 3. 判断是否在转：超过 START_SPEED 才开始，低于 STOP_SPEED 才停止
-    if (!isMoving && smoothSpeed > START_SPEED) isMoving = true;
-    if (isMoving && smoothSpeed < STOP_SPEED) isMoving = false;
+    // 3. 看"一段时间内整体转了多少"，而不是每一帧的小跳动：
+    //    手抖是来回晃，整体变化很小；真的在开门是朝一个方向持续转，整体变化大
+    let change = Math.abs(tilt - tiltHistory[0]);
 
-    // 4. 在转 → 有目标音量；停下 → 目标音量 0
+    // 4. 判断是否在转：超过 START_CHANGE 才开始，低于 STOP_CHANGE 才停止
+    if (!isMoving && change > START_CHANGE) isMoving = true;
+    if (isMoving && change < STOP_CHANGE) isMoving = false;
+
+    // 5. 在转 → 有目标音量（转得越快越响）；停下 → 目标音量 0
     let targetVolume = 0;
     if (isMoving) {
-        targetVolume = map(smoothSpeed, STOP_SPEED, FULL_SPEED, 0.2, MAX_VOLUME, true);
+        targetVolume = map(change, STOP_CHANGE, FULL_CHANGE, 0.2, MAX_VOLUME, true);
     }
 
-    // 5. 渐入渐隐：变大时用 FADE_IN（慢），变小时用 FADE_OUT（快）
+    // 6. 渐入渐隐：变大时用 FADE_IN（慢），变小时用 FADE_OUT（快）
     let fade = (targetVolume > smoothVolume) ? FADE_IN : FADE_OUT;
     smoothVolume = smoothVolume + (targetVolume - smoothVolume) * fade;
     if (smoothVolume < 0.01) smoothVolume = 0;   // 足够小就直接归零
 
-    // 6. 门的开合程度：在转时跟着倾斜角度；一停下就立刻"关门"，让吱呀声本身停止
+    // 7. 门的开合程度：在转时跟着倾斜角度；一停下就立刻"关门"，让吱呀声本身停止
     let position = 0;
     if (isMoving) {
         position = map(tilt, 0, 90, 0.05, 0.5, true);
     }
 
-    // 7. 在页面上显示调试信息
+    // 8. 在页面上显示调试信息
     statusLabels[1].html(VERSION + " tilt: " + round(tilt) +
-                         " speed: " + nf(smoothSpeed, 1, 2) +
+                         " change: " + round(change) +
                          " vol: " + nf(smoothVolume, 1, 2) +
                          (isMoving ? " 转动中" : " 静止"));
 
-    // 8. 把结果送给声音
+    // 9. 把结果送给声音
     playAudio(position, smoothVolume);
 }
 
