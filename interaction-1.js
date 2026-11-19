@@ -38,11 +38,11 @@ door.createDSP(audioContext, 1024)
 //      就像真实的门：推动时吱呀响，不动就安静。倾斜角度越大，门开得越大。
 //==========================================================================================
 
-const VERSION = "v10";
-const STEP = 8;          // 倾斜变化超过 8 度，才算"转了一下"（手抖一般达不到）
+const VERSION = "v11";
+const STEP = 0.3;        // Rotation Y 变化超过 0.3，才算"转了一下"（约 17 度，手抖达不到）
 const HOLD_MS = 300;     // 最后一次"转了一下"之后，声音再保持 0.3 秒；超过就停
 
-let doorLastTilt = null; // 上一次"转了一下"时的角度
+let lastRotY = null;     // 上一次"转了一下"时的 Rotation Y
 let lastMoveTime = 0;    // 上一次"转了一下"的时间
 
 function accelerationChange(accx, accy, accz) {
@@ -51,31 +51,29 @@ function accelerationChange(accx, accy, accz) {
 function rotationChange(rotx, roty, rotz) {
     if (!dspNode || audioContext.state !== "running") return;
 
-    // 1. 现在左右倾斜了多少度
-    const tilt = degrees(roty);
-
-    // 2. 第一次只记住起始角度
-    if (doorLastTilt === null) {
-        doorLastTilt = tilt;
+    // 1. 第一次只记住起始的 Rotation Y
+    if (lastRotY === null) {
+        lastRotY = roty;
         return;
     }
 
-    // 3. 和上次相比转了超过 STEP 度 → 记为"刚刚在转"
-    if (Math.abs(tilt - doorLastTilt) >= STEP) {
-        doorLastTilt = tilt;
+    // 2. 和上次相比 Rotation Y 变了超过 STEP → 记为"刚刚在转"
+    if (Math.abs(roty - lastRotY) >= STEP) {
+        lastRotY = roty;
         lastMoveTime = millis();
     }
 
-    // 4. 刚刚 0.3 秒内在转 → 门的声音跟着角度；否则把门关上 → 没声音
+    // 3. 刚刚 0.3 秒内在转 → 门的声音跟着 Rotation Y；否则把门关上 → 没声音
+    //    Rotation Y 的范围是 -1.57 ~ 1.57（左右各歪 90 度）
     let position = 0;
     if (millis() - lastMoveTime < HOLD_MS) {
-        position = map(Math.abs(tilt), 0, 90, 0.1, 0.5, true);
+        position = map(Math.abs(roty), 0, 1.57, 0.1, 0.5, true);
     }
 
-    // 5. 在页面上显示（调试用）
-    statusLabels[1].html(VERSION + " tilt: " + round(tilt) + (position > 0 ? " 转动中" : " 静止"));
+    // 4. 在页面上显示状态（调试用）
+    statusLabels[1].html(VERSION + (position > 0 ? " 转动中" : " 静止"));
 
-    // 6. 送给声音
+    // 5. 送给声音
     playAudio(position);
 }
 
