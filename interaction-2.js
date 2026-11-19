@@ -39,10 +39,10 @@ insects.createDSP(audioContext, 1024)
 //      动作太大会把虫子吓跑，声音停止，要安静一会儿虫子才会回来。
 //==========================================================================================
 
-const VERSION = "v1";          // 用来确认手机上加载的是不是最新代码
+const VERSION = "v2";          // 用来确认手机上加载的是不是最新代码
 const WINDOW = 20;             // 看最近多少帧（约 0.3 秒）的动作强度
-const SMALL_MIN = 0.3;         // 动作强度超过这个值才算"有小动作"（低于它 = 静止）
-const SMALL_MAX = 2.0;         // 动作强度超过这个值就算"大动作"，虫子被吓跑
+const SMALL_MIN = 0.5;         // 动作强度超过这个值才算"有小动作"（低于它 = 静止）
+const SMALL_MAX = 3.0;         // 动作强度超过这个值就算"大动作"，虫子被吓跑
 const SCARED_TIME = 2000;      // 被吓跑后安静多久（毫秒）
 const MAX_GAIN = 0.8;          // 最大音量
 const FADE_IN = 0.03;          // 虫鸣慢慢出现
@@ -84,7 +84,7 @@ function accelerationChange(accx, accy, accz) {
     // 4. 目标音量：只有"小动作"时有声音，动作越明显虫鸣越大
     let targetGain = 0;
     if (state === "小动作：虫鸣") {
-        targetGain = map(activity, SMALL_MIN, SMALL_MAX, 0.3, MAX_GAIN, true);
+        targetGain = map(activity, SMALL_MIN, 2.0, 0.3, MAX_GAIN, true);
     }
 
     // 5. 渐入渐隐
