@@ -39,11 +39,12 @@ door.createDSP(audioContext, 1024)
 //      就像真实的门：推动时吱呀响，不动就安静。倾斜角度越大，门开得越大。
 //==========================================================================================
 
-const VERSION = "v5";          // 用来确认手机上加载的是不是最新代码
+const VERSION = "v6";          // 用来确认手机上加载的是不是最新代码
 const MOVE_THRESHOLD = 0.4;    // 每帧转动小于这个角度（度）就当作"没在转"——给手抖留的余量
 const FULL_SPEED = 3;          // 转动速度达到这个值（度/帧）时音量最大
 const MAX_VOLUME = 0.7;        // 最大音量
-const FADE = 0.08;             // 渐入渐隐的速度（越小越慢越柔和）
+const FADE_IN = 0.04;          // 渐入速度：开始转时声音出现得慢一点（越小越慢）
+const FADE_OUT = 0.3;          // 渐隐速度：停下后声音消失得快一些（越大越快）
 
 let lastTilt = null;           // 上一帧的倾斜角度
 let smoothSpeed = 0;           // 平滑后的转动速度（过滤掉手抖的小跳动）
@@ -60,7 +61,7 @@ function rotationChange(rotx, roty, rotz) {
     // 2. 转动速度 = 这一帧和上一帧的角度差，再做一点平滑，避免数值乱跳
     let speed = Math.abs(tilt - lastTilt);
     lastTilt = tilt;
-    smoothSpeed = smoothSpeed + (speed - smoothSpeed) * 0.3;
+    smoothSpeed = smoothSpeed + (speed - smoothSpeed) * 0.5;
 
     // 3. 目标音量：速度没超过余量 → 0（当作没在转）；超过后越快越响
     let targetVolume = 0;
@@ -68,8 +69,9 @@ function rotationChange(rotx, roty, rotz) {
         targetVolume = map(smoothSpeed, MOVE_THRESHOLD, FULL_SPEED, 0.2, MAX_VOLUME, true);
     }
 
-    // 4. 渐入渐隐：音量每次只往目标走一小步
-    smoothVolume = smoothVolume + (targetVolume - smoothVolume) * FADE;
+    // 4. 渐入渐隐：变大时用 FADE_IN（慢），变小时用 FADE_OUT（快）
+    let fade = (targetVolume > smoothVolume) ? FADE_IN : FADE_OUT;
+    smoothVolume = smoothVolume + (targetVolume - smoothVolume) * fade;
     if (smoothVolume < 0.005) smoothVolume = 0;   // 足够小就直接归零，彻底安静
 
     // 5. 门的开合程度跟着倾斜角度：0~90 度 → 0.05~0.5；没声音时把门关上
